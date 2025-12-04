@@ -1,0 +1,218 @@
+{
+  "version": "1.0.0",
+  "description": "C2 and reverse shell detection patterns for PCAP analysis",
+  "reverse_shell_patterns": {
+    "bash_reverse": {
+      "name": "Bash Reverse Shell",
+      "description": "Common bash reverse shell payloads",
+      "patterns": [
+        "/bin/bash\\s+-i",
+        "bash\\s+-c.*>&.*0>&1",
+        "/dev/tcp/",
+        "exec\\s+\\d+<>/dev/tcp"
+      ],
+      "ports": [4444, 4445, 5555, 1234, 9001, 9999],
+      "mitre_techniques": ["T1059.004"]
+    },
+    "netcat_reverse": {
+      "name": "Netcat Reverse Shell",
+      "description": "Netcat-based reverse shells",
+      "patterns": [
+        "nc\\s+-e\\s+/bin/(ba)?sh",
+        "nc\\s+-c\\s+/bin/(ba)?sh",
+        "ncat\\s+-e",
+        "nc\\.traditional"
+      ],
+      "ports": [4444, 4445, 5555, 1234],
+      "mitre_techniques": ["T1059.004"]
+    },
+    "python_reverse": {
+      "name": "Python Reverse Shell",
+      "description": "Python reverse shell patterns",
+      "patterns": [
+        "python.*socket.*connect",
+        "import\\s+socket.*subprocess",
+        "pty\\.spawn",
+        "os\\.dup2"
+      ],
+      "ports": [4444, 4445, 5555],
+      "mitre_techniques": ["T1059.006"]
+    },
+    "powershell_reverse": {
+      "name": "PowerShell Reverse Shell",
+      "description": "PowerShell reverse shell patterns",
+      "patterns": [
+        "powershell.*-e\\s+[A-Za-z0-9+/=]+",
+        "IEX\\s*\\(",
+        "Invoke-Expression",
+        "Net\\.Sockets\\.TCPClient",
+        "System\\.Net\\.WebClient",
+        "downloadstring",
+        "-nop\\s+-w\\s+hidden"
+      ],
+      "ports": [4444, 4445, 5555, 443, 80],
+      "mitre_techniques": ["T1059.001"]
+    },
+    "php_reverse": {
+      "name": "PHP Reverse Shell",
+      "description": "PHP reverse shell patterns",
+      "patterns": [
+        "fsockopen",
+        "php\\s+-r.*socket",
+        "proc_open",
+        "popen"
+      ],
+      "ports": [4444, 4445, 5555],
+      "mitre_techniques": ["T1059"]
+    },
+    "meterpreter": {
+      "name": "Meterpreter",
+      "description": "Metasploit Meterpreter indicators",
+      "patterns": [
+        "metsrv\\.dll",
+        "meterpreter",
+        "stdapi",
+        "core_channel"
+      ],
+      "ports": [4444, 4445, 5555, 443],
+      "mitre_techniques": ["T1219"]
+    }
+  },
+  "c2_beacon_patterns": {
+    "cobalt_strike": {
+      "name": "Cobalt Strike",
+      "description": "Cobalt Strike beacon indicators",
+      "patterns": [
+        "__utm",
+        "MSFCONSOLE",
+        "beacon\\.dll"
+      ],
+      "beacon_intervals": [60, 300, 600, 900],
+      "user_agents": [
+        "Mozilla/5.0 (compatible; MSIE 9.0; Windows NT 6.1; WOW64; Trident/5.0)",
+        "Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 6.1; WOW64; Trident/4.0)"
+      ],
+      "mitre_techniques": ["T1071.001", "T1573"]
+    },
+    "empire": {
+      "name": "PowerShell Empire",
+      "description": "Empire C2 indicators",
+      "patterns": [
+        "stage0",
+        "stage1",
+        "stage2"
+      ],
+      "headers": ["Session", "Cookie"],
+      "mitre_techniques": ["T1071.001"]
+    },
+    "generic_beacon": {
+      "name": "Generic C2 Beacon",
+      "description": "Generic beaconing behavior",
+      "indicators": {
+        "regular_intervals": true,
+        "jitter_threshold": 0.2,
+        "min_occurrences": 5,
+        "common_ports": [80, 443, 8080, 8443]
+      },
+      "mitre_techniques": ["T1071"]
+    }
+  },
+  "exfiltration_patterns": {
+    "dns_tunneling": {
+      "name": "DNS Tunneling",
+      "description": "DNS-based data exfiltration",
+      "indicators": {
+        "query_length_threshold": 50,
+        "subdomain_count_threshold": 5,
+        "entropy_threshold": 3.5,
+        "txt_record_abuse": true
+      },
+      "patterns": [
+        "[a-z0-9]{32,}\\.",
+        "base64-like subdomains"
+      ],
+      "mitre_techniques": ["T1048.003"]
+    },
+    "http_exfil": {
+      "name": "HTTP Exfiltration",
+      "description": "HTTP-based data exfiltration",
+      "indicators": {
+        "large_post_threshold": 1048576,
+        "base64_in_url": true,
+        "unusual_content_types": ["application/octet-stream", "image/png"]
+      },
+      "mitre_techniques": ["T1048.002"]
+    },
+    "icmp_exfil": {
+      "name": "ICMP Tunneling",
+      "description": "ICMP-based data exfiltration",
+      "indicators": {
+        "payload_size_threshold": 64,
+        "frequency_threshold": 10
+      },
+      "mitre_techniques": ["T1048"]
+    }
+  },
+  "shell_command_patterns": {
+    "reconnaissance": {
+      "name": "Reconnaissance Commands",
+      "patterns": [
+        "whoami",
+        "id",
+        "uname\\s+-a",
+        "cat\\s+/etc/passwd",
+        "cat\\s+/etc/shadow",
+        "ifconfig",
+        "ipconfig",
+        "netstat",
+        "ps\\s+(aux|ef)",
+        "systeminfo",
+        "hostname",
+        "pwd",
+        "echo\\s+%USERNAME%"
+      ],
+      "mitre_techniques": ["T1082", "T1033", "T1016"]
+    },
+    "persistence": {
+      "name": "Persistence Commands",
+      "patterns": [
+        "crontab",
+        "/etc/cron",
+        "schtasks",
+        "at\\s+\\d+",
+        "reg\\s+add",
+        "sc\\s+create",
+        "systemctl\\s+enable"
+      ],
+      "mitre_techniques": ["T1053", "T1543"]
+    },
+    "lateral_movement": {
+      "name": "Lateral Movement Commands",
+      "patterns": [
+        "psexec",
+        "wmic\\s+/node",
+        "winrm",
+        "ssh\\s+",
+        "scp\\s+",
+        "net\\s+use",
+        "rdesktop",
+        "xfreerdp"
+      ],
+      "mitre_techniques": ["T1021"]
+    },
+    "privilege_escalation": {
+      "name": "Privilege Escalation Commands",
+      "patterns": [
+        "sudo\\s+",
+        "su\\s+-",
+        "runas",
+        "getsystem",
+        "mimikatz",
+        "sekurlsa",
+        "hashdump"
+      ],
+      "mitre_techniques": ["T1548", "T1078"]
+    }
+  }
+}
+

@@ -1,0 +1,288 @@
+{% extends "report_base.html" %}
+
+{% block content %}
+<div class="section" id="iocs">
+    <h2>Indicators of Compromise (IoCs)</h2>
+    
+    {% if description %}
+    <p>{{ description }}</p>
+    {% endif %}
+    
+    <!-- IoC Statistics -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-value">{{ stats.total_ips | default(0) }}</div>
+            <div class="stat-label">IP Addresses</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ stats.total_domains | default(0) }}</div>
+            <div class="stat-label">Domains</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ stats.total_urls | default(0) }}</div>
+            <div class="stat-label">URLs</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ stats.total_hashes | default(0) }}</div>
+            <div class="stat-label">File Hashes</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ stats.malicious | default(0) }}</div>
+            <div class="stat-label">Malicious</div>
+        </div>
+    </div>
+    
+    <!-- IP Addresses -->
+    {% if ip_addresses %}
+    <h3>IP Addresses</h3>
+    <div class="ioc-table-container">
+        <table class="ioc-table">
+            <thead>
+                <tr>
+                    <th>IP Address</th>
+                    <th>Type</th>
+                    <th>Country</th>
+                    <th>ASN</th>
+                    <th>Reputation</th>
+                    <th>First Seen</th>
+                    <th>Count</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for ip in ip_addresses %}
+                <tr class="{{ 'malicious' if ip.reputation == 'malicious' else '' }}">
+                    <td class="ioc-value">{{ ip.value }}</td>
+                    <td>{{ ip.type | default('Unknown') }}</td>
+                    <td>{{ ip.country | default('N/A') }}</td>
+                    <td>{{ ip.asn | default('N/A') }}</td>
+                    <td>
+                        <span class="reputation-badge {{ ip.reputation | default('unknown') }}">
+                            {{ ip.reputation | default('Unknown') | upper }}
+                        </span>
+                    </td>
+                    <td>{{ ip.first_seen | default('N/A') }}</td>
+                    <td>{{ ip.count | default(1) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+    
+    <!-- Domains -->
+    {% if domains %}
+    <h3>Domains</h3>
+    <div class="ioc-table-container">
+        <table class="ioc-table">
+            <thead>
+                <tr>
+                    <th>Domain</th>
+                    <th>Resolved IPs</th>
+                    <th>Reputation</th>
+                    <th>First Seen</th>
+                    <th>Query Count</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for domain in domains %}
+                <tr class="{{ 'malicious' if domain.reputation == 'malicious' else '' }}">
+                    <td class="ioc-value">{{ domain.value }}</td>
+                    <td>{{ domain.resolved_ips | join(', ') if domain.resolved_ips else 'N/A' }}</td>
+                    <td>
+                        <span class="reputation-badge {{ domain.reputation | default('unknown') }}">
+                            {{ domain.reputation | default('Unknown') | upper }}
+                        </span>
+                    </td>
+                    <td>{{ domain.first_seen | default('N/A') }}</td>
+                    <td>{{ domain.count | default(1) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+    
+    <!-- URLs -->
+    {% if urls %}
+    <h3>URLs</h3>
+    <div class="ioc-table-container">
+        <table class="ioc-table">
+            <thead>
+                <tr>
+                    <th>URL</th>
+                    <th>Method</th>
+                    <th>Status</th>
+                    <th>Reputation</th>
+                    <th>Timestamp</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for url in urls %}
+                <tr class="{{ 'malicious' if url.reputation == 'malicious' else '' }}">
+                    <td class="ioc-value url-cell">{{ url.value }}</td>
+                    <td>{{ url.method | default('GET') }}</td>
+                    <td>{{ url.status | default('N/A') }}</td>
+                    <td>
+                        <span class="reputation-badge {{ url.reputation | default('unknown') }}">
+                            {{ url.reputation | default('Unknown') | upper }}
+                        </span>
+                    </td>
+                    <td>{{ url.timestamp | default('N/A') }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+    
+    <!-- File Hashes -->
+    {% if hashes %}
+    <h3>File Hashes</h3>
+    <div class="ioc-table-container">
+        <table class="ioc-table">
+            <thead>
+                <tr>
+                    <th>Hash</th>
+                    <th>Type</th>
+                    <th>Filename</th>
+                    <th>VT Detection</th>
+                    <th>Reputation</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for hash in hashes %}
+                <tr class="{{ 'malicious' if hash.reputation == 'malicious' else '' }}">
+                    <td class="ioc-value hash-cell">{{ hash.value }}</td>
+                    <td>{{ hash.type | default('Unknown') }}</td>
+                    <td>{{ hash.filename | default('N/A') }}</td>
+                    <td>{{ hash.vt_detection | default('N/A') }}</td>
+                    <td>
+                        <span class="reputation-badge {{ hash.reputation | default('unknown') }}">
+                            {{ hash.reputation | default('Unknown') | upper }}
+                        </span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+    
+    <!-- Defanged IoCs for Copy -->
+    {% if defanged_iocs %}
+    <h3>Defanged IoCs (Safe to Share)</h3>
+    <div class="info-box">
+        <p>Copy these defanged IoCs for safe sharing in reports and tickets:</p>
+    </div>
+    <pre><code>{{ defanged_iocs }}</code></pre>
+    {% endif %}
+</div>
+
+<style>
+    .ioc-table-container {
+        overflow-x: auto;
+        margin: 20px 0;
+    }
+    
+    .ioc-table {
+        min-width: 100%;
+    }
+    
+    .ioc-value {
+        font-family: 'JetBrains Mono', monospace;
+        color: var(--htb-accent);
+        word-break: break-all;
+    }
+    
+    .url-cell {
+        max-width: 400px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    
+    .hash-cell {
+        font-size: 0.8rem;
+    }
+    
+    tr.malicious {
+        background: rgba(239, 68, 68, 0.1);
+    }
+    
+    tr.malicious:hover {
+        background: rgba(239, 68, 68, 0.15);
+    }
+    
+    .reputation-badge {
+        padding: 3px 10px;
+        border-radius: 12px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+    
+    .reputation-badge.malicious {
+        background: var(--htb-error);
+        color: white;
+    }
+    
+    .reputation-badge.suspicious {
+        background: var(--htb-warning);
+        color: black;
+    }
+    
+    .reputation-badge.clean {
+        background: var(--htb-green);
+        color: black;
+    }
+    
+    .reputation-badge.unknown {
+        background: var(--htb-text-dim);
+        color: white;
+    }
+    
+    /* Export Section */
+    .export-section {
+        margin-top: 30px;
+        padding: 20px;
+        background: var(--htb-darker);
+        border-radius: 8px;
+    }
+    
+    .export-buttons {
+        display: flex;
+        gap: 15px;
+        flex-wrap: wrap;
+    }
+    
+    .export-btn {
+        background: var(--htb-card);
+        border: 1px solid var(--htb-green);
+        color: var(--htb-green);
+        padding: 10px 20px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-family: 'JetBrains Mono', monospace;
+        transition: all 0.3s;
+    }
+    
+    .export-btn:hover {
+        background: var(--htb-green);
+        color: var(--htb-darker);
+    }
+</style>
+
+{% if show_export %}
+<div class="section" id="export">
+    <h2>Export IoCs</h2>
+    <div class="export-section">
+        <p>Export IoCs in various formats for integration with security tools:</p>
+        <div class="export-buttons">
+            <button class="export-btn" onclick="copyToClipboard('iocs-json')">Copy JSON</button>
+            <button class="export-btn" onclick="copyToClipboard('iocs-csv')">Copy CSV</button>
+            <button class="export-btn" onclick="copyToClipboard('iocs-stix')">Copy STIX</button>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}
+

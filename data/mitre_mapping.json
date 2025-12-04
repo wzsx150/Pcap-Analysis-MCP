@@ -1,0 +1,315 @@
+{
+  "version": "1.0.0",
+  "description": "MITRE ATT&CK technique mappings for network forensics",
+  "kill_chain_phases": {
+    "reconnaissance": {
+      "name": "Reconnaissance",
+      "techniques": ["T1595", "T1592", "T1589", "T1590"],
+      "network_indicators": [
+        "port_scan",
+        "host_discovery",
+        "service_enumeration",
+        "dns_enumeration"
+      ]
+    },
+    "resource_development": {
+      "name": "Resource Development",
+      "techniques": ["T1583", "T1584", "T1587", "T1588"],
+      "network_indicators": []
+    },
+    "initial_access": {
+      "name": "Initial Access",
+      "techniques": ["T1190", "T1133", "T1566"],
+      "network_indicators": [
+        "exploit_attempt",
+        "phishing_download",
+        "vpn_abuse"
+      ]
+    },
+    "execution": {
+      "name": "Execution",
+      "techniques": ["T1059", "T1203", "T1204"],
+      "network_indicators": [
+        "command_execution",
+        "script_download",
+        "malware_download"
+      ]
+    },
+    "persistence": {
+      "name": "Persistence",
+      "techniques": ["T1505", "T1136", "T1053"],
+      "network_indicators": [
+        "webshell_upload",
+        "scheduled_task_creation"
+      ]
+    },
+    "privilege_escalation": {
+      "name": "Privilege Escalation",
+      "techniques": ["T1548", "T1068", "T1078"],
+      "network_indicators": [
+        "privesc_exploit",
+        "credential_access"
+      ]
+    },
+    "defense_evasion": {
+      "name": "Defense Evasion",
+      "techniques": ["T1027", "T1070", "T1562"],
+      "network_indicators": [
+        "encoded_payload",
+        "log_deletion",
+        "security_tool_disable"
+      ]
+    },
+    "credential_access": {
+      "name": "Credential Access",
+      "techniques": ["T1003", "T1110", "T1557"],
+      "network_indicators": [
+        "credential_dump",
+        "brute_force",
+        "mitm_attack"
+      ]
+    },
+    "discovery": {
+      "name": "Discovery",
+      "techniques": ["T1082", "T1083", "T1016", "T1049", "T1033"],
+      "network_indicators": [
+        "system_info_query",
+        "network_scan_internal",
+        "user_enumeration"
+      ]
+    },
+    "lateral_movement": {
+      "name": "Lateral Movement",
+      "techniques": ["T1021", "T1210", "T1563"],
+      "network_indicators": [
+        "smb_lateral",
+        "rdp_lateral",
+        "ssh_lateral",
+        "winrm_lateral"
+      ]
+    },
+    "collection": {
+      "name": "Collection",
+      "techniques": ["T1005", "T1039", "T1114"],
+      "network_indicators": [
+        "file_collection",
+        "data_staging"
+      ]
+    },
+    "command_and_control": {
+      "name": "Command and Control",
+      "techniques": ["T1071", "T1573", "T1105", "T1572"],
+      "network_indicators": [
+        "c2_beacon",
+        "encrypted_channel",
+        "tunneling"
+      ]
+    },
+    "exfiltration": {
+      "name": "Exfiltration",
+      "techniques": ["T1048", "T1041", "T1567"],
+      "network_indicators": [
+        "data_exfil",
+        "dns_tunneling",
+        "http_exfil"
+      ]
+    },
+    "impact": {
+      "name": "Impact",
+      "techniques": ["T1486", "T1489", "T1490"],
+      "network_indicators": [
+        "ransomware_traffic",
+        "service_stop"
+      ]
+    }
+  },
+  "techniques": {
+    "T1190": {
+      "name": "Exploit Public-Facing Application",
+      "tactic": "initial_access",
+      "description": "Adversaries may attempt to take advantage of a weakness in an Internet-facing computer",
+      "network_detections": [
+        "cve_exploit_attempt",
+        "sql_injection",
+        "command_injection",
+        "path_traversal"
+      ]
+    },
+    "T1059": {
+      "name": "Command and Scripting Interpreter",
+      "tactic": "execution",
+      "description": "Adversaries may abuse command and script interpreters to execute commands",
+      "subtechniques": {
+        "T1059.001": "PowerShell",
+        "T1059.003": "Windows Command Shell",
+        "T1059.004": "Unix Shell",
+        "T1059.006": "Python",
+        "T1059.007": "JavaScript"
+      },
+      "network_detections": [
+        "reverse_shell",
+        "encoded_command",
+        "script_execution"
+      ]
+    },
+    "T1071": {
+      "name": "Application Layer Protocol",
+      "tactic": "command_and_control",
+      "description": "Adversaries may communicate using application layer protocols",
+      "subtechniques": {
+        "T1071.001": "Web Protocols",
+        "T1071.004": "DNS"
+      },
+      "network_detections": [
+        "http_c2",
+        "dns_c2",
+        "beacon_traffic"
+      ]
+    },
+    "T1048": {
+      "name": "Exfiltration Over Alternative Protocol",
+      "tactic": "exfiltration",
+      "description": "Adversaries may steal data by exfiltrating it over a different protocol",
+      "subtechniques": {
+        "T1048.002": "Exfiltration Over Asymmetric Encrypted Non-C2 Protocol",
+        "T1048.003": "Exfiltration Over Unencrypted/Obfuscated Non-C2 Protocol"
+      },
+      "network_detections": [
+        "dns_tunneling",
+        "icmp_tunneling",
+        "large_data_transfer"
+      ]
+    },
+    "T1021": {
+      "name": "Remote Services",
+      "tactic": "lateral_movement",
+      "description": "Adversaries may use Valid Accounts to log into a service for remote access",
+      "subtechniques": {
+        "T1021.001": "Remote Desktop Protocol",
+        "T1021.002": "SMB/Windows Admin Shares",
+        "T1021.004": "SSH",
+        "T1021.006": "Windows Remote Management"
+      },
+      "network_detections": [
+        "rdp_session",
+        "smb_session",
+        "ssh_session",
+        "winrm_session"
+      ]
+    },
+    "T1505": {
+      "name": "Server Software Component",
+      "tactic": "persistence",
+      "description": "Adversaries may abuse legitimate extensible development features of server software",
+      "subtechniques": {
+        "T1505.003": "Web Shell"
+      },
+      "network_detections": [
+        "webshell_upload",
+        "webshell_activity"
+      ]
+    },
+    "T1573": {
+      "name": "Encrypted Channel",
+      "tactic": "command_and_control",
+      "description": "Adversaries may employ a known encryption algorithm to conceal command and control traffic",
+      "network_detections": [
+        "encrypted_c2",
+        "ssl_c2",
+        "custom_encryption"
+      ]
+    },
+    "T1219": {
+      "name": "Remote Access Software",
+      "tactic": "command_and_control",
+      "description": "Adversaries may use legitimate desktop support and remote access software",
+      "network_detections": [
+        "rat_traffic",
+        "remote_access_tool"
+      ]
+    },
+    "T1082": {
+      "name": "System Information Discovery",
+      "tactic": "discovery",
+      "description": "Adversaries may attempt to get detailed information about the operating system",
+      "network_detections": [
+        "recon_commands",
+        "system_enumeration"
+      ]
+    },
+    "T1016": {
+      "name": "System Network Configuration Discovery",
+      "tactic": "discovery",
+      "description": "Adversaries may look for details about the network configuration of systems",
+      "network_detections": [
+        "network_recon",
+        "arp_scan",
+        "internal_scan"
+      ]
+    },
+    "T1033": {
+      "name": "System Owner/User Discovery",
+      "tactic": "discovery",
+      "description": "Adversaries may attempt to identify the primary user of a system",
+      "network_detections": [
+        "user_enumeration",
+        "whoami_command"
+      ]
+    },
+    "T1083": {
+      "name": "File and Directory Discovery",
+      "tactic": "discovery",
+      "description": "Adversaries may enumerate files and directories on a file system",
+      "network_detections": [
+        "file_listing",
+        "directory_traversal"
+      ]
+    },
+    "T1595": {
+      "name": "Active Scanning",
+      "tactic": "reconnaissance",
+      "description": "Adversaries may execute active reconnaissance scans to gather information",
+      "subtechniques": {
+        "T1595.001": "Scanning IP Blocks",
+        "T1595.002": "Vulnerability Scanning"
+      },
+      "network_detections": [
+        "port_scan",
+        "vulnerability_scan",
+        "service_scan"
+      ]
+    },
+    "T1110": {
+      "name": "Brute Force",
+      "tactic": "credential_access",
+      "description": "Adversaries may use brute force techniques to gain access to accounts",
+      "subtechniques": {
+        "T1110.001": "Password Guessing",
+        "T1110.003": "Password Spraying"
+      },
+      "network_detections": [
+        "failed_logins",
+        "password_spray",
+        "brute_force"
+      ]
+    }
+  },
+  "detection_to_technique_map": {
+    "port_scan": ["T1595.001"],
+    "service_scan": ["T1595.002"],
+    "host_discovery": ["T1595.001", "T1016"],
+    "sql_injection": ["T1190"],
+    "command_injection": ["T1190", "T1059"],
+    "path_traversal": ["T1190", "T1083"],
+    "webshell": ["T1505.003"],
+    "reverse_shell": ["T1059.004", "T1059.001"],
+    "c2_beacon": ["T1071.001", "T1573"],
+    "dns_tunneling": ["T1048.003", "T1071.004"],
+    "data_exfil": ["T1048"],
+    "smb_lateral": ["T1021.002"],
+    "rdp_lateral": ["T1021.001"],
+    "ssh_lateral": ["T1021.004"],
+    "brute_force": ["T1110"]
+  }
+}
+

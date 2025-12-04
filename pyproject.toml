@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pcap-analysis-mcp"
+version = "1.0.0"
+description = "POC: Network forensics MCP server for packet analysis and attack detection"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "PCAP Analysis MCP Project"}
+]
+keywords = [
+    "pcap",
+    "network-forensics",
+    "mcp",
+    "packet-analysis",
+    "security",
+    "proof-of-concept"
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+]
+requires-python = ">=3.9"
+dependencies = [
+    "scapy>=2.5.0",
+]
+
+[project.optional-dependencies]
+full = [
+    "pandas>=2.0.0",
+    "jinja2>=3.0.0",
+    "requests>=2.28.0",
+]
+
+[project.urls]
+Repository = "https://github.com/0xhackerfren/Pcap-Analysis-MCP"
+
+[project.scripts]
+pcap-analysis-mcp = "pcap_analysis_mcp.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

@@ -1,0 +1,200 @@
+# -*- coding: utf-8 -*-
+"""
+Constants and default configurations for PCAP Analysis MCP.
+"""
+
+from pathlib import Path
+
+# =============================================================================
+# PATHS
+# =============================================================================
+
+PACKAGE_ROOT = Path(__file__).parent
+PROJECT_ROOT = PACKAGE_ROOT.parent.parent
+DATA_DIR = PROJECT_ROOT / "data"
+TEMPLATES_DIR = PROJECT_ROOT / "templates"
+
+# =============================================================================
+# DEFAULT EXPLOIT PATTERNS
+# =============================================================================
+
+DEFAULT_EXPLOIT_PATTERNS = {
+    "patterns": {
+        "CVE-2024-4577": {
+            "name": "PHP CGI Argument Injection",
+            "severity": "critical",
+            "patterns": [
+                "%AD.*allow_url_include",
+                "%AD.*auto_prepend_file",
+                "php://input"
+            ],
+            "mitre_techniques": ["T1190"]
+        },
+        "CVE-2021-44228": {
+            "name": "Log4Shell",
+            "severity": "critical",
+            "patterns": [
+                "\\$\\{jndi:",
+                "\\$\\{.*\\$\\{",
+                "\\$\\{lower:",
+                "\\$\\{upper:"
+            ],
+            "mitre_techniques": ["T1190", "T1059"]
+        },
+        "sql_injection": {
+            "name": "SQL Injection",
+            "severity": "high",
+            "patterns": [
+                "'\\s*(OR|AND)\\s*'.*'\\s*=\\s*'",
+                "UNION\\s+(ALL\\s+)?SELECT",
+                "SLEEP\\s*\\("
+            ],
+            "mitre_techniques": ["T1190"]
+        },
+        "path_traversal": {
+            "name": "Path Traversal",
+            "severity": "high",
+            "patterns": [
+                "\\.\\./",
+                "%2e%2e/",
+                "/etc/passwd",
+                "C:\\\\Windows"
+            ],
+            "mitre_techniques": ["T1083"]
+        },
+        "command_injection": {
+            "name": "Command Injection",
+            "severity": "critical",
+            "patterns": [
+                ";\\s*(ls|cat|whoami|id)",
+                "\\|\\s*(ls|cat|whoami)",
+                "`.*`"
+            ],
+            "mitre_techniques": ["T1059"]
+        },
+        "webshell": {
+            "name": "Webshell Indicators",
+            "severity": "critical",
+            "patterns": [
+                "c99\\.php",
+                "r57\\.php",
+                "cmd\\.php\\?cmd=",
+                "eval\\s*\\(\\s*\\$_(GET|POST)"
+            ],
+            "mitre_techniques": ["T1505.003"]
+        }
+    }
+}
+
+# =============================================================================
+# DEFAULT C2 INDICATORS
+# =============================================================================
+
+DEFAULT_C2_INDICATORS = {
+    "reverse_shell_patterns": {
+        "bash_reverse": {
+            "name": "Bash Reverse Shell",
+            "patterns": [
+                "/bin/bash\\s+-i",
+                "bash\\s+-c.*>&.*0>&1",
+                "/dev/tcp/"
+            ],
+            "mitre_techniques": ["T1059.004"]
+        },
+        "netcat_reverse": {
+            "name": "Netcat Reverse Shell",
+            "patterns": [
+                "nc\\s+-e\\s+/bin/(ba)?sh",
+                "nc\\s+-c\\s+/bin/(ba)?sh"
+            ],
+            "mitre_techniques": ["T1059.004"]
+        },
+        "python_reverse": {
+            "name": "Python Reverse Shell",
+            "patterns": [
+                "python.*socket.*connect",
+                "import\\s+socket.*subprocess"
+            ],
+            "mitre_techniques": ["T1059.006"]
+        },
+        "powershell_reverse": {
+            "name": "PowerShell Reverse Shell",
+            "patterns": [
+                "powershell.*-e\\s+[A-Za-z0-9+/=]+",
+                "IEX\\s*\\(",
+                "Net\\.Sockets\\.TCPClient"
+            ],
+            "mitre_techniques": ["T1059.001"]
+        }
+    },
+    "shell_command_patterns": {
+        "reconnaissance": {
+            "patterns": ["whoami", "id", "uname\\s+-a", "ifconfig", "ipconfig", "netstat"]
+        },
+        "persistence": {
+            "patterns": ["crontab", "schtasks", "reg\\s+add"]
+        },
+        "lateral_movement": {
+            "patterns": ["psexec", "wmic\\s+/node", "ssh\\s+", "net\\s+use"]
+        }
+    }
+}
+
+# =============================================================================
+# DEFAULT MITRE MAPPING
+# =============================================================================
+
+DEFAULT_MITRE_MAPPING = {
+    "techniques": {
+        "T1190": {"name": "Exploit Public-Facing Application", "tactic": "initial_access"},
+        "T1059": {"name": "Command and Scripting Interpreter", "tactic": "execution"},
+        "T1059.001": {"name": "PowerShell", "tactic": "execution"},
+        "T1059.004": {"name": "Unix Shell", "tactic": "execution"},
+        "T1059.006": {"name": "Python", "tactic": "execution"},
+        "T1071": {"name": "Application Layer Protocol", "tactic": "command_and_control"},
+        "T1083": {"name": "File and Directory Discovery", "tactic": "discovery"},
+        "T1505.003": {"name": "Web Shell", "tactic": "persistence"},
+        "T1595.001": {"name": "Scanning IP Blocks", "tactic": "reconnaissance"}
+    }
+}
+
+# =============================================================================
+# PROTOCOL CONSTANTS
+# =============================================================================
+
+MCP_PROTOCOL_VERSION = "2024-11-05"
+MCP_SERVER_NAME = "pcap-analysis-mcp"
+MCP_SERVER_VERSION = "1.0.0"
+
+# =============================================================================
+# ANALYSIS DEFAULTS
+# =============================================================================
+
+DEFAULT_PORT_SCAN_THRESHOLD = 15
+DEFAULT_BEACON_INTERVAL_THRESHOLD = 60.0
+DEFAULT_EXFIL_BYTES_THRESHOLD = 1000000
+
+# Common service ports
+COMMON_PORTS = {
+    21: "FTP",
+    22: "SSH",
+    23: "Telnet",
+    25: "SMTP",
+    53: "DNS",
+    80: "HTTP",
+    110: "POP3",
+    139: "NetBIOS",
+    143: "IMAP",
+    443: "HTTPS",
+    445: "SMB",
+    993: "IMAPS",
+    995: "POP3S",
+    3389: "RDP",
+    5985: "WinRM",
+    8080: "HTTP-Alt",
+    8443: "HTTPS-Alt"
+}
+
+# Private IP ranges
+PRIVATE_IP_PREFIXES = ['10.', '192.168.', '172.16.', '127.']
+

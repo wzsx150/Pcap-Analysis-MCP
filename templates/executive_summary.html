@@ -1,0 +1,373 @@
+{% extends "report_base.html" %}
+
+{% block content %}
+<div class="section" id="executive-summary">
+    <h2>Executive Summary</h2>
+    
+    <!-- Overall Assessment -->
+    <div class="assessment-box {{ overall_severity | default('info') }}">
+        <div class="assessment-header">
+            <span class="assessment-icon">
+                {% if overall_severity == 'critical' %}!{% elif overall_severity == 'high' %}!{% elif overall_severity == 'medium' %}!{% else %}i{% endif %}
+            </span>
+            <span class="assessment-title">Overall Assessment: {{ overall_severity | default('Info') | upper }}</span>
+        </div>
+        <p class="assessment-text">{{ assessment_summary | default('Analysis complete. Review findings below.') }}</p>
+    </div>
+    
+    <!-- Key Findings at a Glance -->
+    <h3>Key Findings</h3>
+    <div class="findings-summary">
+        <div class="finding-stat critical">
+            <div class="finding-count">{{ findings_by_severity.critical | default(0) }}</div>
+            <div class="finding-label">Critical</div>
+        </div>
+        <div class="finding-stat high">
+            <div class="finding-count">{{ findings_by_severity.high | default(0) }}</div>
+            <div class="finding-label">High</div>
+        </div>
+        <div class="finding-stat medium">
+            <div class="finding-count">{{ findings_by_severity.medium | default(0) }}</div>
+            <div class="finding-label">Medium</div>
+        </div>
+        <div class="finding-stat low">
+            <div class="finding-count">{{ findings_by_severity.low | default(0) }}</div>
+            <div class="finding-label">Low</div>
+        </div>
+        <div class="finding-stat info">
+            <div class="finding-count">{{ findings_by_severity.info | default(0) }}</div>
+            <div class="finding-label">Info</div>
+        </div>
+    </div>
+    
+    <!-- Attack Overview -->
+    {% if attack_summary %}
+    <h3>Attack Overview</h3>
+    <div class="attack-overview">
+        <table>
+            <tr>
+                <td><strong>Attack Type</strong></td>
+                <td>{{ attack_summary.attack_type | default('Unknown') }}</td>
+            </tr>
+            <tr>
+                <td><strong>Attacker IP(s)</strong></td>
+                <td class="ioc-value">{{ attack_summary.attacker_ips | join(', ') if attack_summary.attacker_ips else 'Not identified' }}</td>
+            </tr>
+            <tr>
+                <td><strong>Target(s)</strong></td>
+                <td class="ioc-value">{{ attack_summary.targets | join(', ') if attack_summary.targets else 'Not identified' }}</td>
+            </tr>
+            <tr>
+                <td><strong>Initial Access</strong></td>
+                <td>{{ attack_summary.initial_access | default('Not identified') }}</td>
+            </tr>
+            <tr>
+                <td><strong>Duration</strong></td>
+                <td>{{ attack_summary.duration | default('Unknown') }}</td>
+            </tr>
+            <tr>
+                <td><strong>Data Exfiltrated</strong></td>
+                <td>{{ attack_summary.data_exfil | default('Unknown') }}</td>
+            </tr>
+        </table>
+    </div>
+    {% endif %}
+    
+    <!-- Top Critical Findings -->
+    {% if critical_findings %}
+    <h3>Critical Findings Requiring Immediate Action</h3>
+    {% for finding in critical_findings[:5] %}
+    <div class="finding-card critical">
+        <div class="finding-header">
+            <span class="finding-title">{{ finding.title }}</span>
+            <span class="severity-badge critical">CRITICAL</span>
+        </div>
+        <p>{{ finding.description }}</p>
+        {% if finding.recommendation %}
+        <div class="recommendation">
+            <strong>Recommended Action:</strong> {{ finding.recommendation }}
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+    {% endif %}
+    
+    <!-- MITRE ATT&CK Techniques -->
+    {% if mitre_techniques %}
+    <h3>MITRE ATT&CK Techniques Observed</h3>
+    <div class="mitre-matrix">
+        {% for technique in mitre_techniques %}
+        <div class="mitre-technique">
+            <span class="technique-id">{{ technique.id }}</span>
+            <span class="technique-name">{{ technique.name }}</span>
+            <span class="technique-tactic">{{ technique.tactic }}</span>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    
+    <!-- Recommendations -->
+    {% if recommendations %}
+    <h3>Recommendations</h3>
+    <div class="recommendations-list">
+        {% for rec in recommendations %}
+        <div class="recommendation-item {{ rec.priority | default('medium') }}">
+            <div class="rec-priority">{{ rec.priority | default('Medium') | upper }}</div>
+            <div class="rec-content">
+                <strong>{{ rec.title }}</strong>
+                <p>{{ rec.description }}</p>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    
+    <!-- Investigation Details -->
+    <h3>Investigation Details</h3>
+    <table>
+        <tr>
+            <td><strong>PCAP File</strong></td>
+            <td>{{ pcap_info.filename | default('N/A') }}</td>
+        </tr>
+        <tr>
+            <td><strong>File Size</strong></td>
+            <td>{{ pcap_info.size | default('N/A') }}</td>
+        </tr>
+        <tr>
+            <td><strong>Capture Duration</strong></td>
+            <td>{{ pcap_info.duration | default('N/A') }}</td>
+        </tr>
+        <tr>
+            <td><strong>Total Packets</strong></td>
+            <td>{{ pcap_info.total_packets | default(0) }}</td>
+        </tr>
+        <tr>
+            <td><strong>Analysis Date</strong></td>
+            <td>{{ analysis_date | default('N/A') }}</td>
+        </tr>
+        <tr>
+            <td><strong>Analyst</strong></td>
+            <td>{{ analyst | default('PCAP Analysis MCP') }}</td>
+        </tr>
+    </table>
+</div>
+
+<style>
+    .assessment-box {
+        padding: 25px;
+        border-radius: 10px;
+        margin: 20px 0;
+        border: 2px solid;
+    }
+    
+    .assessment-box.critical {
+        background: rgba(239, 68, 68, 0.1);
+        border-color: var(--htb-error);
+    }
+    
+    .assessment-box.high {
+        background: rgba(249, 115, 22, 0.1);
+        border-color: #f97316;
+    }
+    
+    .assessment-box.medium {
+        background: rgba(251, 191, 36, 0.1);
+        border-color: var(--htb-warning);
+    }
+    
+    .assessment-box.low, .assessment-box.info {
+        background: rgba(59, 130, 246, 0.1);
+        border-color: var(--htb-blue);
+    }
+    
+    .assessment-header {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        margin-bottom: 15px;
+    }
+    
+    .assessment-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 1.5rem;
+    }
+    
+    .assessment-box.critical .assessment-icon { background: var(--htb-error); color: white; }
+    .assessment-box.high .assessment-icon { background: #f97316; color: white; }
+    .assessment-box.medium .assessment-icon { background: var(--htb-warning); color: black; }
+    .assessment-box.low .assessment-icon, .assessment-box.info .assessment-icon { background: var(--htb-blue); color: white; }
+    
+    .assessment-title {
+        font-family: 'Rajdhani', sans-serif;
+        font-size: 1.4rem;
+        font-weight: 700;
+    }
+    
+    .assessment-box.critical .assessment-title { color: var(--htb-error); }
+    .assessment-box.high .assessment-title { color: #f97316; }
+    .assessment-box.medium .assessment-title { color: var(--htb-warning); }
+    .assessment-box.low .assessment-title, .assessment-box.info .assessment-title { color: var(--htb-blue); }
+    
+    .assessment-text {
+        color: var(--htb-text);
+        line-height: 1.8;
+    }
+    
+    /* Findings Summary */
+    .findings-summary {
+        display: flex;
+        gap: 20px;
+        margin: 20px 0;
+        flex-wrap: wrap;
+    }
+    
+    .finding-stat {
+        flex: 1;
+        min-width: 100px;
+        padding: 20px;
+        border-radius: 10px;
+        text-align: center;
+        background: var(--htb-darker);
+        border: 2px solid;
+    }
+    
+    .finding-stat.critical { border-color: var(--htb-error); }
+    .finding-stat.high { border-color: #f97316; }
+    .finding-stat.medium { border-color: var(--htb-warning); }
+    .finding-stat.low { border-color: var(--htb-blue); }
+    .finding-stat.info { border-color: var(--htb-purple); }
+    
+    .finding-count {
+        font-size: 2.5rem;
+        font-weight: 700;
+    }
+    
+    .finding-stat.critical .finding-count { color: var(--htb-error); }
+    .finding-stat.high .finding-count { color: #f97316; }
+    .finding-stat.medium .finding-count { color: var(--htb-warning); }
+    .finding-stat.low .finding-count { color: var(--htb-blue); }
+    .finding-stat.info .finding-count { color: var(--htb-purple); }
+    
+    .finding-label {
+        font-size: 0.9rem;
+        color: var(--htb-text-dim);
+        margin-top: 5px;
+    }
+    
+    /* Attack Overview */
+    .attack-overview {
+        background: var(--htb-darker);
+        border-radius: 8px;
+        padding: 20px;
+        margin: 20px 0;
+    }
+    
+    .attack-overview table {
+        margin: 0;
+    }
+    
+    .attack-overview td {
+        padding: 10px 15px;
+    }
+    
+    .attack-overview td:first-child {
+        width: 200px;
+        color: var(--htb-text-dim);
+    }
+    
+    /* Recommendation */
+    .recommendation {
+        margin-top: 15px;
+        padding: 12px;
+        background: rgba(159, 239, 0, 0.1);
+        border-radius: 6px;
+        font-size: 0.9rem;
+    }
+    
+    /* MITRE Matrix */
+    .mitre-matrix {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin: 20px 0;
+    }
+    
+    .mitre-technique {
+        background: var(--htb-darker);
+        border: 1px solid var(--htb-purple);
+        border-radius: 6px;
+        padding: 10px 15px;
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+    }
+    
+    .technique-id {
+        font-family: 'JetBrains Mono', monospace;
+        color: var(--htb-purple);
+        font-weight: 600;
+    }
+    
+    .technique-name {
+        color: var(--htb-text);
+        font-size: 0.9rem;
+    }
+    
+    .technique-tactic {
+        color: var(--htb-text-dim);
+        font-size: 0.8rem;
+    }
+    
+    /* Recommendations List */
+    .recommendations-list {
+        margin: 20px 0;
+    }
+    
+    .recommendation-item {
+        display: flex;
+        gap: 15px;
+        padding: 15px;
+        background: var(--htb-darker);
+        border-radius: 8px;
+        margin-bottom: 10px;
+        border-left: 4px solid;
+    }
+    
+    .recommendation-item.critical { border-left-color: var(--htb-error); }
+    .recommendation-item.high { border-left-color: #f97316; }
+    .recommendation-item.medium { border-left-color: var(--htb-warning); }
+    .recommendation-item.low { border-left-color: var(--htb-blue); }
+    
+    .rec-priority {
+        padding: 5px 12px;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        white-space: nowrap;
+        height: fit-content;
+    }
+    
+    .recommendation-item.critical .rec-priority { background: var(--htb-error); color: white; }
+    .recommendation-item.high .rec-priority { background: #f97316; color: white; }
+    .recommendation-item.medium .rec-priority { background: var(--htb-warning); color: black; }
+    .recommendation-item.low .rec-priority { background: var(--htb-blue); color: white; }
+    
+    .rec-content p {
+        margin-top: 5px;
+        color: var(--htb-text-dim);
+        font-size: 0.9rem;
+    }
+    
+    .ioc-value {
+        font-family: 'JetBrains Mono', monospace;
+        color: var(--htb-accent);
+    }
+</style>
+{% endblock %}
+
