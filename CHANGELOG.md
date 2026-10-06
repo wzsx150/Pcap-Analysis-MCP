@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.0.1] - 2026-10-06
+
+Bug fix release - MCP protocol compliance and client compatibility.
+
+### Fixed
+- tools/list: added required `inputSchema` to all 63 tools (auto-generated
+  from tool signatures); clients previously rejected the entire tool list
+- JSON-RPC: notifications (e.g. `notifications/initialized`) no longer
+  receive an invalid `id: null` error response
+- `generate_html_report` falls back to the embedded template when
+  `report_base.html` is missing
+
+### Changed
+- initialize: protocolVersion negotiation (2024-11-05 / 2025-03-26 /
+  2025-06-18) and `instructions` field
+- tools/call: unknown tool / invalid arguments return -32602; execution
+  failures return an `isError` result per spec
+- stdio: force UTF-8 streams (Windows GBK default), skip malformed lines
+  instead of exiting, support JSON-RPC batches, `ping`, and lenient
+  `resources/list` / `prompts/list` handling
+- CLI: runs as MCP server by default (no arguments needed)
+
 ## [1.0.0] - 2024-12-04
 
 Initial release - POC for network forensics via MCP.

@@ -172,7 +172,7 @@ SERVER_INSTRUCTIONS = (
     "build_attack_timeline, and finally generate_html_report to export results."
 )
 MCP_SERVER_NAME = "pcap-analysis-mcp"
-MCP_SERVER_VERSION = "1.0.0"
+MCP_SERVER_VERSION = "1.0.1"
 
 # =============================================================================
 # ANALYSIS DEFAULTS
