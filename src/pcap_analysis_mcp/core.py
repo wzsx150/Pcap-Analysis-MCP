@@ -15,6 +15,9 @@ import json
 import re
 import os
 import logging
+import inspect
+import types
+import typing
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Callable
 from datetime import datetime
@@ -28,6 +31,8 @@ from pcap_analysis_mcp.constants import (
     DEFAULT_C2_INDICATORS,
     DEFAULT_MITRE_MAPPING,
     MCP_PROTOCOL_VERSION,
+    SERVER_INSTRUCTIONS,
+    SUPPORTED_PROTOCOL_VERSIONS,
     MCP_SERVER_NAME,
     MCP_SERVER_VERSION,
     DEFAULT_PORT_SCAN_THRESHOLD,
@@ -77,6 +82,101 @@ try:
     REQUESTS_AVAILABLE = True
 except ImportError:
     REQUESTS_AVAILABLE = False
+
+
+# =============================================================================
+# INPUT SCHEMA 生成（JSON Schema）
+# =============================================================================
+
+# Python 基础类型 -> JSON Schema 类型映射
+# 注意：bool 是 int 的子类，因此用字典按精确类型匹配，避免 bool 被误判为 integer
+_PRIMITIVE_SCHEMA_TYPES: Dict[type, str] = {
+    str: "string",
+    int: "integer",
+    float: "number",
+    bool: "boolean",
+}
+
+
+def _annotation_to_schema(annotation: Any) -> Dict[str, Any]:
+    """
+    将 Python 类型标注转换为对应的 JSON Schema 片段。
+
+    Args:
+        annotation: 函数参数的类型标注（可为 None 或 inspect.Parameter.empty）。
+
+    Returns:
+        JSON Schema 片段；无法识别时返回空 dict（表示不做类型约束，接受任意值）。
+    """
+    if annotation is None or annotation is inspect.Parameter.empty:
+        return {}
+
+    # 联合类型（Optional[X] / X | None）：剔除 None 分支后递归处理
+    origin = typing.get_origin(annotation)
+    union_type = getattr(types, "UnionType", None)  # Python 3.10+ 的 X | Y 语法
+    if origin is typing.Union or (union_type is not None and origin is union_type):
+        args = [a for a in typing.get_args(annotation) if a is not type(None)]
+        if len(args) == 1:
+            return _annotation_to_schema(args[0])
+        return {}  # 多类型联合：不做约束
+
+    if origin is list:
+        return {"type": "array", "items": {}}
+    if origin is dict:
+        return {"type": "object"}
+    if origin is tuple:
+        return {"type": "array"}
+
+    schema_type = _PRIMITIVE_SCHEMA_TYPES.get(annotation)
+    if schema_type:
+        return {"type": schema_type}
+    return {}
+
+
+def build_input_schema(func: Callable) -> Dict[str, Any]:
+    """
+    根据函数签名自动生成 MCP 规范要求的 inputSchema（JSON Schema 对象）。
+
+    MCP 规范规定 tools/list 返回的每个工具必须包含 inputSchema
+    （type 为 object 的 JSON Schema），缺失会导致客户端（基于 zod 校验的 SDK）
+    拒绝加载全部工具。
+
+    Args:
+        func: 已绑定的工具方法（绑定方法的签名会自动排除 self）。
+
+    Returns:
+        形如 {"type": "object", "properties": {...}, "required": [...]} 的 schema。
+    """
+    properties: Dict[str, Any] = {}
+    required: List[str] = []
+
+    try:
+        signature = inspect.signature(func)
+    except (TypeError, ValueError):
+        # 无法内省签名时，返回最宽松的合法 schema
+        return {"type": "object", "properties": {}}
+
+    for param_name, param in signature.parameters.items():
+        # *args / **kwargs 不映射为 schema 属性
+        if param.kind in (param.VAR_POSITIONAL, param.VAR_KEYWORD):
+            continue
+
+        schema = _annotation_to_schema(param.annotation)
+        if not schema and param.default is not inspect.Parameter.empty and param.default is not None:
+            # 无类型标注时，尝试从默认值推断类型
+            inferred = _PRIMITIVE_SCHEMA_TYPES.get(type(param.default))
+            if inferred:
+                schema = {"type": inferred}
+
+        properties[param_name] = schema
+        # 无默认值的参数视为必填
+        if param.default is inspect.Parameter.empty:
+            required.append(param_name)
+
+    result: Dict[str, Any] = {"type": "object", "properties": properties}
+    if required:
+        result["required"] = required
+    return result
 
 
 class PCAPAnalysisMCP:
@@ -217,68 +317,171 @@ class PCAPAnalysisMCP:
     # MCP PROTOCOL METHODS
     # =========================================================================
     
-    def handle_request(self, request: Dict) -> Dict:
+    def handle_request(self, request: Dict) -> Optional[Dict]:
         """
-        Handle incoming MCP request.
-        
+        处理单条 MCP 消息（JSON-RPC 2.0）。
+
+        通知（无 id 的消息）按规范不产生任何应答，返回 None；
+        请求（id 为字符串/数字）必须返回应答字典。
+
         Args:
-            request: JSON-RPC request dict.
-            
+            request: 客户端发来的 JSON-RPC 消息。
+
         Returns:
-            JSON-RPC response dict.
+            JSON-RPC 应答字典；通知或无法处理的消息返回 None。
         """
+        if not isinstance(request, dict):
+            logger.warning(f"Ignoring non-object message: {request!r}")
+            return None
+
         method = request.get("method", "")
-        params = request.get("params", {})
         req_id = request.get("id")
-        
+        # JSON-RPC 2.0：id 为字符串/数字才是"请求"；无 id 或 id 为 null 视为通知
+        # （bool 是 int 子类，需显式排除，避免 id: true 被当成请求）
+        is_request = isinstance(req_id, (str, int, float)) and not isinstance(req_id, bool)
+
+        params = request.get("params")
+        if not isinstance(params, dict):
+            params = {}
+
+        # 所有通知（notifications/initialized、cancelled、roots/list_changed 等）
+        # 均按规范静默忽略，绝不回写任何响应（回写 id 为 null 的响应会导致客户端校验失败）
+        if not is_request:
+            if method == "notifications/initialized":
+                logger.info("Received notifications/initialized")
+            return None
+
+        # ---- 以下均为需要应答的请求 ----
         if method == "initialize":
-            return MCPProtocol.success_response(req_id, {
-                "protocolVersion": MCP_PROTOCOL_VERSION,
-                "serverInfo": {"name": self.name, "version": self.version},
-                "capabilities": {"tools": {}}
-            })
-        
-        elif method == "tools/list":
-            tools = []
-            for name, func in self._tools.items():
-                tools.append({
-                    "name": name,
-                    "description": func.__doc__.split('\n')[0] if func.__doc__ else name
-                })
-            return MCPProtocol.success_response(req_id, {"tools": tools})
-        
-        elif method == "tools/call":
-            tool_name = params.get("name", "")
-            tool_args = params.get("arguments", {})
-            
-            if tool_name not in self._tools:
-                return MCPProtocol.error_response(req_id, -32601, f"Unknown tool: {tool_name}")
-            
-            try:
-                result = self._tools[tool_name](**tool_args)
-                return MCPProtocol.success_response(req_id, {
-                    "content": [{"type": "text", "text": json.dumps(result, default=str)}]
-                })
-            except Exception as e:
-                logger.exception(f"Tool {tool_name} failed")
-                return MCPProtocol.error_response(req_id, -32603, str(e))
-        
+            return self._handle_initialize(req_id, params)
+        if method == "ping":
+            return MCPProtocol.success_response(req_id, {})
+        if method == "tools/list":
+            return self._handle_tools_list(req_id)
+        if method == "tools/call":
+            return self._handle_tools_call(req_id, params)
+        if method == "resources/list":
+            # 未声明 resources 能力，但宽容返回空列表，兼容不检查 capabilities 的客户端
+            return MCPProtocol.success_response(req_id, {"resources": []})
+        if method == "prompts/list":
+            # 同上：宽容返回空 prompts 列表
+            return MCPProtocol.success_response(req_id, {"prompts": []})
+        if method == "logging/setLevel":
+            # 宽容接受日志级别设置（日志走 stderr，不影响协议流）
+            return MCPProtocol.success_response(req_id, {})
+
         return MCPProtocol.error_response(req_id, -32601, f"Unknown method: {method}")
-    
+
+    def _handle_initialize(self, req_id: Any, params: Dict) -> Dict:
+        """
+        处理 initialize 请求，进行 MCP 协议版本协商。
+
+        规范要求：客户端请求的版本受支持则原样回显，否则返回服务端支持的版本。
+        """
+        requested = params.get("protocolVersion")
+        if isinstance(requested, str) and requested in SUPPORTED_PROTOCOL_VERSIONS:
+            version = requested
+        else:
+            version = MCP_PROTOCOL_VERSION
+        return MCPProtocol.success_response(req_id, {
+            "protocolVersion": version,
+            "serverInfo": {"name": self.name, "version": self.version},
+            "capabilities": {"tools": {}},
+            "instructions": SERVER_INSTRUCTIONS,
+        })
+
+    def _handle_tools_list(self, req_id: Any) -> Dict:
+        """
+        处理 tools/list 请求。
+
+        MCP 规范要求每个工具必须包含 inputSchema（object 类型的 JSON Schema），
+        否则客户端会拒绝加载全部工具。
+        """
+        tools = []
+        for name, func in self._tools.items():
+            description = (func.__doc__ or "").strip().split('\n')[0] or name
+            tools.append({
+                "name": name,
+                "description": description,
+                "inputSchema": build_input_schema(func),
+            })
+        return MCPProtocol.success_response(req_id, {"tools": tools})
+
+    def _handle_tools_call(self, req_id: Any, params: Dict) -> Dict:
+        """
+        处理 tools/call 请求。
+
+        按 MCP 规范区分两类错误：
+        - 未知工具/参数不合法：返回 JSON-RPC 协议错误（-32602 Invalid params）；
+        - 工具执行失败：返回带 isError: true 的正常结果，便于 LLM 感知失败原因。
+        """
+        tool_name = params.get("name")
+        if not isinstance(tool_name, str) or not tool_name:
+            return MCPProtocol.error_response(req_id, -32602, "Invalid params: missing tool 'name'")
+        if tool_name not in self._tools:
+            return MCPProtocol.error_response(req_id, -32602, f"Unknown tool: {tool_name}")
+
+        tool_args = params.get("arguments")
+        if not isinstance(tool_args, dict):
+            tool_args = {}
+
+        try:
+            result = self._tools[tool_name](**tool_args)
+        except TypeError as e:
+            # 参数与工具签名不匹配 -> 协议层参数错误
+            logger.warning(f"Tool {tool_name} received invalid arguments: {e}")
+            return MCPProtocol.error_response(req_id, -32602, f"Invalid arguments for tool '{tool_name}': {e}")
+        except Exception as e:
+            # 工具执行错误：按规范以 isError 结果返回，而不是 JSON-RPC 错误
+            logger.exception(f"Tool {tool_name} failed")
+            return MCPProtocol.success_response(req_id, {
+                "content": [{"type": "text", "text": f"Tool execution failed: {e}"}],
+                "isError": True,
+            })
+
+        return MCPProtocol.success_response(req_id, {
+            "content": [{"type": "text", "text": json.dumps(result, default=str)}]
+        })
+
     def run_server(self):
         """Run MCP server loop (stdio transport)."""
+        # Windows 下 stdin/stdout 默认编码为 GBK，强制切换为 UTF-8 保证协议流正确
+        MCPProtocol.configure_streams()
         logger.info(f"Starting {self.name} v{self.version}")
-        
+
         while True:
             try:
                 request = MCPProtocol.read_message()
                 if request is None:
-                    break
-                
+                    break  # EOF：客户端已断开
+
+                # JSON-RPC 2.0 批量消息兼容：逐条处理，仅当存在应答时回写数组
+                if isinstance(request, list):
+                    responses = []
+                    for item in request:
+                        if not isinstance(item, dict):
+                            logger.warning(f"Ignoring non-object batch item: {item!r}")
+                            continue
+                        response = self.handle_request(item)
+                        if response is not None:
+                            responses.append(response)
+                    if responses:
+                        MCPProtocol.write_message(responses)
+                    continue
+
+                if not isinstance(request, dict):
+                    logger.warning(f"Ignoring non-object message: {request!r}")
+                    continue
+
+                # 通知返回 None：不写任何应答
                 response = self.handle_request(request)
-                MCPProtocol.write_message(response)
-                
+                if response is not None:
+                    MCPProtocol.write_message(response)
+
             except KeyboardInterrupt:
+                break
+            except BrokenPipeError:
+                logger.info("Client closed the connection")
                 break
             except Exception as e:
                 logger.error(f"Server error: {e}")
@@ -1222,13 +1425,18 @@ class PCAPAnalysisMCP:
             return err
         
         try:
+            template = None
+            # 优先使用外部模板目录中的 report_base.html；模板缺失或加载失败时回退到内置模板
             if TEMPLATES_DIR.exists():
-                env = Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)))
-                template = env.get_template("report_base.html")
-            else:
-                template_str = self._get_embedded_template()
+                try:
+                    fs_env = Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)))
+                    template = fs_env.get_template("report_base.html")
+                except Exception:
+                    logger.warning("report_base.html not found or failed to load, using embedded template")
+                    template = None
+            if template is None:
                 env = Environment(loader=BaseLoader())
-                template = env.from_string(template_str)
+                template = env.from_string(self._get_embedded_template())
             
             data = {
                 "title": f"PCAP Analysis: {self.pcap_metadata.get('filename', 'Unknown')}",

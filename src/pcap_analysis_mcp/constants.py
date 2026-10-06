@@ -163,6 +163,14 @@ DEFAULT_MITRE_MAPPING = {
 # =============================================================================
 
 MCP_PROTOCOL_VERSION = "2024-11-05"
+# 服务端可接受的 MCP 协议版本（initialize 时与客户端协商，无法匹配时回退 MCP_PROTOCOL_VERSION）
+SUPPORTED_PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"]
+# initialize 应答中的 instructions 字段：向客户端（LLM）说明本服务的推荐用法
+SERVER_INSTRUCTIONS = (
+    "PCAP network forensics server. Typical workflow: call load_pcap with a pcap file "
+    "path first, then run get_summary / detect_web_exploits / detect_port_scan / "
+    "build_attack_timeline, and finally generate_html_report to export results."
+)
 MCP_SERVER_NAME = "pcap-analysis-mcp"
 MCP_SERVER_VERSION = "1.0.0"
 
