@@ -11,8 +11,14 @@ from pathlib import Path
 
 PACKAGE_ROOT = Path(__file__).parent
 PROJECT_ROOT = PACKAGE_ROOT.parent.parent
-DATA_DIR = PROJECT_ROOT / "data"
-TEMPLATES_DIR = PROJECT_ROOT / "templates"
+# 数据与模板目录：优先使用包内目录（已随 wheel 打包，pip 正式安装后依然可用）；
+# 兼容回退到项目根目录（旧目录结构或数据未打包的场景）
+DATA_DIR = PACKAGE_ROOT / "data"
+if not DATA_DIR.exists():
+    DATA_DIR = PROJECT_ROOT / "data"
+TEMPLATES_DIR = PACKAGE_ROOT / "templates"
+if not TEMPLATES_DIR.exists():
+    TEMPLATES_DIR = PROJECT_ROOT / "templates"
 
 # =============================================================================
 # DEFAULT EXPLOIT PATTERNS
@@ -172,7 +178,7 @@ SERVER_INSTRUCTIONS = (
     "build_attack_timeline, and finally generate_html_report to export results."
 )
 MCP_SERVER_NAME = "pcap-analysis-mcp"
-MCP_SERVER_VERSION = "1.0.1"
+MCP_SERVER_VERSION = "1.0.2"
 
 # =============================================================================
 # ANALYSIS DEFAULTS

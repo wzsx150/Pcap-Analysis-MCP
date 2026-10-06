@@ -136,9 +136,9 @@ Includes patterns for:
 ```
 pcap-analysis-mcp/
   src/pcap_analysis_mcp/   # Main package
-  data/                     # Detection patterns (JSON)
-  templates/                # HTML report templates
-  examples/                 # Usage examples
+    data/                  # Detection patterns (JSON, bundled into the wheel)
+    templates/             # HTML report templates (bundled into the wheel)
+  examples/                # Usage examples
 ```
 
 ## License

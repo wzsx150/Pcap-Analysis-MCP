@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.0.2] - 2026-10-06
+
+Packaging fix - full detection data now bundled for non-editable installs.
+
+### Fixed
+- Bundled `data/*.json` and `templates/*.html` into the wheel; non-editable
+  installs previously fell back to built-in defaults (6 exploit pattern
+  types instead of 12) and lost the HTML report templates
+
+### Changed
+- Moved `data/` and `templates/` inside the package
+  (`src/pcap_analysis_mcp/`); data paths now resolve package-first with
+  fallback to the project root
+
 ## [1.0.1] - 2026-10-06
 
 Bug fix release - MCP protocol compliance and client compatibility.
