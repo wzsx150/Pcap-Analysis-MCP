@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Callable
 from datetime import datetime
 from collections import defaultdict
+from html import escape as escape_html
 
 from pcap_analysis_mcp.protocol import MCPProtocol
 from pcap_analysis_mcp.constants import (
@@ -36,6 +37,7 @@ from pcap_analysis_mcp.constants import (
     MCP_SERVER_NAME,
     MCP_SERVER_VERSION,
     DEFAULT_PORT_SCAN_THRESHOLD,
+    DEFAULT_WEBSHELL_POST_THRESHOLD,
     DEFAULT_BEACON_INTERVAL_THRESHOLD,
     DEFAULT_EXFIL_BYTES_THRESHOLD,
     PRIVATE_IP_PREFIXES,
@@ -753,23 +755,44 @@ class PCAPAnalysisMCP:
         """Extract unique IPs, ports, or domains from PCAP."""
         if err := self._require_loaded():
             return err
-        
+
+        # 参数别名归一化：ip/ips、port/ports、domain/domains 均可；
+        # 非法取值直接报错而不是静默返回空结果
+        normalized = value_type.strip().lower()
+        if normalized not in ("all", "ip", "ips", "port", "ports", "domain", "domains"):
+            return {
+                "error": (
+                    f"Invalid value_type: '{value_type}'. "
+                    "Valid values: all, ips, ports, domains"
+                )
+            }
+
         result = {}
-        if value_type in ["all", "ips"]:
+        if normalized in ("all", "ip", "ips"):
             ips = set()
             for pkt in self.packets:
                 if IP in pkt:
                     ips.update([pkt[IP].src, pkt[IP].dst])
             result["ips"] = sorted(list(ips))
-        
-        if value_type in ["all", "domains"]:
+
+        if normalized in ("all", "port", "ports"):
+            # 端口取值：收集 TCP/UDP 的源端口与目的端口
+            ports = set()
+            for pkt in self.packets:
+                if TCP in pkt:
+                    ports.update([pkt[TCP].sport, pkt[TCP].dport])
+                elif UDP in pkt:
+                    ports.update([pkt[UDP].sport, pkt[UDP].dport])
+            result["ports"] = sorted(list(ports))
+
+        if normalized in ("all", "domain", "domains"):
             domains = set()
             for pkt in self.packets:
                 if DNS in pkt and DNSQR in pkt:
                     q = pkt[DNSQR].qname
                     domains.add((q.decode() if isinstance(q, bytes) else q).rstrip('.'))
             result["domains"] = sorted(list(domains))
-        
+
         return result
     
     # =========================================================================
@@ -1020,8 +1043,73 @@ class PCAPAnalysisMCP:
         return {"transfers": transfers}
     
     def detect_webshells(self) -> Dict[str, Any]:
-        """Detect webshell indicators in traffic."""
-        return self.search_payload(r'(c99|r57|cmd\.php\?|eval\s*\(\s*\$_)')
+        """Detect webshell indicators (Godzilla, China Chopper, classic PHP shells)."""
+        if err := self._require_loaded():
+            return err
+
+        # WebShell 家族特征集：经典 PHP 一句话、命令执行函数、
+        # 哥斯拉（pass=/key=）、中国菜刀（cmd/z0）等管理端常用参数
+        signatures = {
+            "classic_eval": rb'eval\s*\(\s*(?:base64_decode\s*\(\s*)?\$_(?:POST|GET|REQUEST|COOKIE)',
+            "classic_assert": rb'assert\s*\(\s*\$_(?:POST|GET|REQUEST|COOKIE)',
+            "shell_names": rb'\b(?:c99|r57|wso|b374k|cmd\.php)\b',
+            "cmd_exec": rb'(?:shell_exec|passthru|proc_open|popen|system)\s*\(',
+            "godzilla_params": rb'(?:^|[\s?&])(?:pass|key)=',
+            "chopper_params": rb'(?:^|[\s?&])(?:cmd|command|z0|z1)=',
+        }
+        compiled = {name: re.compile(p, re.IGNORECASE | re.MULTILINE)
+                    for name, p in signatures.items()}
+
+        sig_counts = {name: 0 for name in signatures}
+        results = []
+        for i, pkt in enumerate(self.packets):
+            if Raw not in pkt:
+                continue
+            payload = bytes(pkt[Raw].load)
+            for name, regex in compiled.items():
+                m = regex.search(payload)
+                if m:
+                    sig_counts[name] += 1
+                    # 保留命中点前后各 40 字节的上下文片段，便于人工研判
+                    start = max(0, m.start() - 40)
+                    snippet = payload[start:m.end() + 40].decode('utf-8', errors='replace')
+                    results.append({
+                        "index": i,
+                        "src": pkt[IP].src if IP in pkt else None,
+                        "dst": pkt[IP].dst if IP in pkt else None,
+                        "signature": name,
+                        "match": m.group(0).decode('utf-8', errors='replace'),
+                        "snippet": snippet,
+                    })
+
+        # 结构性启发：同一 .php 端点被反复 POST，是哥斯拉/冰蝎等
+        # 加密 WebShell 的典型行为特征（无明文特征可匹配时的兜底检测）
+        post_counts = defaultdict(int)
+        for pkt in self.packets:
+            if TCP in pkt and Raw in pkt:
+                payload = bytes(pkt[Raw].load)
+                if payload.startswith(b'POST '):
+                    try:
+                        uri = payload.split(b' ', 2)[1].decode('utf-8', errors='replace')
+                        path = uri.split('?')[0]
+                        if path.endswith('.php'):
+                            post_counts[path] += 1
+                    except (IndexError, ValueError):
+                        continue
+        suspicious_endpoints = [
+            {"uri": uri, "post_count": count}
+            for uri, count in sorted(post_counts.items(), key=lambda x: -x[1])
+            if count >= DEFAULT_WEBSHELL_POST_THRESHOLD
+        ]
+
+        webshell_suspected = any(v > 0 for v in sig_counts.values()) or bool(suspicious_endpoints)
+        return {
+            "webshell_suspected": webshell_suspected,
+            "signatures_matched": {k: v for k, v in sig_counts.items() if v > 0},
+            "matches": len(results),
+            "results": results[:50],
+            "suspicious_endpoints": suspicious_endpoints[:20],
+        }
     
     def get_user_agents(self) -> Dict[str, Any]:
         """Get unique User-Agent strings."""
@@ -1501,16 +1589,87 @@ th { color: #9FEF00; }
             "severity": "critical" if exploits.get("exploits_detected", 0) > 0 else "info"
         }
     
+    def _write_html_report(self, output_path: str, title: str, body_html: str) -> Dict[str, Any]:
+        """将 HTML 内容写入报告文件，供 timeline / IoC 报告共用（纯 stdlib，不依赖 jinja2）。"""
+        html_doc = (
+            "<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"utf-8\">\n"
+            f"<title>{escape_html(title)}</title>\n<style>\n"
+            "body { font-family: monospace; background: #0a0f1a; color: #e2e8f0; padding: 20px; }\n"
+            "h1, h2 { color: #9FEF00; }\n"
+            "table { border-collapse: collapse; width: 100%; margin: 10px 0; }\n"
+            "th, td { border: 1px solid #2d3a4f; padding: 6px 10px; text-align: left; }\n"
+            "th { background: #1a2332; color: #9FEF00; }\n"
+            ".meta { color: #7a8699; }\n"
+            ".defanged { background: #1a2332; padding: 10px; border-radius: 6px; word-break: break-all; }\n"
+            "</style>\n</head>\n<body>\n"
+            f"<h1>{escape_html(title)}</h1>\n"
+            f"<p class='meta'>PCAP: {escape_html(self.pcap_metadata.get('filename', 'Unknown'))} — "
+            f"generated {datetime.now().isoformat()}</p>\n"
+            f"{body_html}\n</body>\n</html>\n"
+        )
+        Path(output_path).write_text(html_doc, encoding='utf-8')
+        return {"success": True, "path": output_path}
+
     def generate_timeline_html(self, output_path: str = "timeline.html") -> Dict[str, Any]:
-        """Generate timeline visualization data."""
+        """Generate attack timeline HTML report file."""
+        if err := self._require_loaded():
+            return err
+
         timeline = self.build_attack_timeline()
-        return {"events": timeline.get("events", []), "path": output_path}
-    
+        events = timeline.get("events", [])
+        try:
+            # 每个事件渲染为表格行：阶段 / 类型 / 来源 / 严重程度
+            rows = [
+                "<tr>"
+                f"<td>{escape_html(str(e.get('phase', '')))}</td>"
+                f"<td>{escape_html(str(e.get('type', '')))}</td>"
+                f"<td>{escape_html(str(e.get('source') or ''))}</td>"
+                f"<td>{escape_html(str(e.get('severity', 'info')))}</td>"
+                "</tr>"
+                for e in events
+            ]
+            body = (
+                f"<h2>Timeline Events ({len(events)})</h2>\n"
+                "<table>\n<tr><th>Phase</th><th>Type</th><th>Source</th><th>Severity</th></tr>\n"
+                + "\n".join(rows)
+                + "\n</table>\n"
+            )
+            result = self._write_html_report(output_path, "Attack Timeline Report", body)
+            result.update({"total_events": len(events), "phases": timeline.get("phases", [])})
+            return result
+        except Exception as e:
+            return {"error": str(e)}
+
     def generate_ioc_report(self, output_path: str = "iocs.html") -> Dict[str, Any]:
-        """Generate IoC-focused report data."""
-        iocs = self.extract_all_iocs()
-        defanged = self.defang_iocs()
-        return {"iocs": iocs, "defanged": defanged, "path": output_path}
+        """Generate IoC-focused HTML report file."""
+        if err := self._require_loaded():
+            return err
+
+        try:
+            iocs = self.extract_all_iocs()
+            defanged = self.defang_iocs()
+            ips = iocs.get("ips", [])
+            domains = iocs.get("domains", [])
+            def_ips = defanged.get("ips", [])
+            def_domains = defanged.get("domains", [])
+
+            # 渲染 IP / 域名表格与去武器化 IoC 明细
+            def _rows(values):
+                return "\n".join(f"<tr><td>{escape_html(str(v))}</td></tr>" for v in values)
+
+            body = (
+                f"<h2>IP Addresses ({len(ips)})</h2>\n"
+                "<table>\n<tr><th>IP</th></tr>\n" + _rows(ips) + "\n</table>\n"
+                f"<h2>Domains ({len(domains)})</h2>\n"
+                "<table>\n<tr><th>Domain</th></tr>\n" + _rows(domains) + "\n</table>\n"
+                "<h2>Defanged IoCs (safe for sharing)</h2>\n"
+                f"<p class='defanged'>{escape_html(' ; '.join(def_ips + def_domains))}</p>\n"
+            )
+            result = self._write_html_report(output_path, "IoC Report", body)
+            result.update({"total_ips": len(ips), "total_domains": len(domains)})
+            return result
+        except Exception as e:
+            return {"error": str(e)}
     
     def export_findings_json(self, output_path: str = "findings.json") -> Dict[str, Any]:
         """Export all findings as JSON file."""

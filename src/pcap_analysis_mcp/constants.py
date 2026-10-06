@@ -178,13 +178,15 @@ SERVER_INSTRUCTIONS = (
     "build_attack_timeline, and finally generate_html_report to export results."
 )
 MCP_SERVER_NAME = "pcap-analysis-mcp"
-MCP_SERVER_VERSION = "1.0.2"
+MCP_SERVER_VERSION = "1.0.3"
 
 # =============================================================================
 # ANALYSIS DEFAULTS
 # =============================================================================
 
 DEFAULT_PORT_SCAN_THRESHOLD = 15
+# WebShell 疑似端点的最低 POST 次数（哥斯拉/冰蝎等加密 WebShell 会持续 POST 同一 .php 端点）
+DEFAULT_WEBSHELL_POST_THRESHOLD = 3
 DEFAULT_BEACON_INTERVAL_THRESHOLD = 60.0
 DEFAULT_EXFIL_BYTES_THRESHOLD = 1000000
 
